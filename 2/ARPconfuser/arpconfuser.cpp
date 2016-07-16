@@ -76,7 +76,6 @@ void ARPConfuser::recvarp(const char* dev,in_addr *srcip, uint8_t *srchw,\
         cout << "[!] pcap_open_live " << errbuf << endl;
         return;
     }
-    cout << filter_exp << endl;
     if(pcap_compile(handle,&fp,filter_exp,0,net) == -1)
     {
         cout << "[!] pcap_compile " << pcap_geterr(handle) << endl;
