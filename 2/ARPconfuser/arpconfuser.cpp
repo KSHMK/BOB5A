@@ -11,16 +11,16 @@
 #include"Header.h"
 #include"arpconfuser.h"
 using namespace std;
-ARPConfuser::ARPConfuser(const char *dev, const char *txipaddr, const char *rxipaddr)
+ARPConfuser::ARPConfuser(const char *dev, const char *txipaddr)
 {
     this->dev = dev;
-    inet_pton(AF_INET,rxipaddr,&RXipaddr);
-    inet_pton(AF_INET,txipaddr,&TXipaddr);
     memset(&Myipaddr,0x00,sizeof(Myipaddr));
     memset(Myhwaddr,0x00,sizeof(Myhwaddr));
+
+    getmyaddr();
+    inet_pton(AF_INET,txipaddr,&TXipaddr);
     memset(RXhwaddr,0x00,sizeof(RXhwaddr));
     memset(TXhwaddr,0x00,sizeof(TXhwaddr));
-    getmyaddr();
     gethwaddr(&TXipaddr,TXhwaddr);
     gethwaddr(&RXipaddr,RXhwaddr);
 }
@@ -33,13 +33,14 @@ void ARPConfuser::getmyaddr(void)
     memset(&buffer,0x00,sizeof(buffer));
     buffer.ifr_addr.sa_family = AF_INET;
     strncpy(buffer.ifr_name,dev,IFNAMSIZ-1);
+    // hw
     if(ioctl(s,SIOCGIFHWADDR, &buffer)<0)
     {
         perror("ioctl");
         exit(3);
     }
     memcpy(Myhwaddr,buffer.ifr_hwaddr.sa_data,ETH_ALEN);
-
+    // ip
     if(ioctl(s,SIOCGIFADDR,&buffer)<0)
     {
         perror("ioctl");
@@ -47,6 +48,30 @@ void ARPConfuser::getmyaddr(void)
     }
     memcpy(&Myipaddr,&(((struct sockaddr_in *)&buffer.ifr_addr)->sin_addr),sizeof(struct in_addr));
     close(s);
+    // GW
+    FILE *f;
+    char line[100],*p,*c,*g,*save;
+    f = fopen("/proc/net/route","r");
+    while(fgets(line,100,f))
+    {
+        p = strtok_r(line," \t",&save);
+        c = strtok_r(NULL," \t",&save);
+        g = strtok_r(NULL," \t",&save);
+        if(p!= NULL && c!=NULL)
+        {
+            if(!strcmp(c, "00000000"))
+            {
+                if(g)
+                {
+                    char *end;
+                    int ng = strtol(g,&end,16);
+                    RXipaddr.s_addr=ng;
+                }
+                break;
+            }
+        }
+
+    }
 
 }
 void ARPConfuser::recvarp(const char* dev,in_addr *srcip, uint8_t *srchw,\

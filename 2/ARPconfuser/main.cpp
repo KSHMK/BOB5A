@@ -10,9 +10,9 @@ int main(int argc,char* argv[])
     char *dev;
     char errbuf[PCAP_ERRBUF_SIZE];
 
-    if(argc != 3)
+    if(argc != 2)
     {
-        cout << "[-] Usage " << argv[0] << "[Gateway IP] [Target IP]" << endl;
+        cout << "[-] Usage " << argv[0] << "[Target IP]" << endl;
         return 0;
     }
 
@@ -22,7 +22,7 @@ int main(int argc,char* argv[])
         return 1;
     }
 
-    ARPConfuser arpc(dev,argv[2],argv[1]);
+    ARPConfuser arpc(dev,argv[1]);
     arpc.startcorrupt();
     return 0;
 

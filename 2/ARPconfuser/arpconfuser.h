@@ -18,7 +18,7 @@ public:
     void getmyaddr(void);
     void gethwaddr(struct in_addr* targetip,uint8_t* targethw);
     void startcorrupt(void);
-    ARPConfuser(const char* dev,const char* txipaddr,const char* rxipaddr);
+    ARPConfuser(const char* dev,const char* txipaddr);
 };
 
 #endif // ARPCONFUSER_H
