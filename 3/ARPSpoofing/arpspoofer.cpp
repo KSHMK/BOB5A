@@ -7,15 +7,11 @@
 #include<sys/ioctl.h>
 #include<sys/socket.h>
 #include<net/if.h>
-
-#include<fstream>
-
 #include"Header.h"
 #include"arpspoofer.h"
 using namespace std;
 ARPSpoofer::ARPSpoofer(const char *dev, const char *txipaddr, const char *rxipaddr)
 {
-    state = true;
     this->dev = dev;
     memset(&Myipaddr,0x00,sizeof(Myipaddr));
     memset(Myhwaddr,0x00,sizeof(Myhwaddr));
@@ -348,6 +344,7 @@ void ARPSpoofer::startrelay(void)
 
 void ARPSpoofer::startarpspoofing(void)
 {
+    state = true;
     startcorrupt();
     startrelay();
 }
