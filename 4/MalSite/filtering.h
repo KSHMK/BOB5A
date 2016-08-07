@@ -2,18 +2,20 @@
 #define FILTERING_H
 #include<fstream>
 #include<vector>
-#include<string>
 
 using namespace std;
 class filtering
 {
 private:
-    string filtered;
+    int fd;
+    char* filtered;
     int filteredsize;
-    vector<int> getPi(string p);
+    vector<int> getPi(char* p);
 public:
-    bool search(string p);
-    filtering(string fname);
+    uint32_t search(char* p,char* s,uint32_t off);
+    bool searchfi(char* p);
+    filtering(char* fname);
+    ~filtering(void);
 };
 
 #endif // FILTERING_H

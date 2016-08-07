@@ -1,21 +1,37 @@
-#include<fstream>
+#include<iostream>
 #include<vector>
-#include<string>
+#include<string.h>
+#include<unistd.h>
+#include<sys/mman.h>
+#include<sys/types.h>
+#include<fcntl.h>
 #include "filtering.h"
 using namespace std;
-filtering::filtering(string fname)
+filtering::filtering(char* fname)
 {
-    ifstream fp(fname);
-    while(!fp.eof())
-        filtered.push_back(fp.get());
-    filteredsize = filtered.size()
+    if((fd = open(fname,O_RDONLY)) < 0)
+    {
+        cout << "[!] open " << endl;
+        return;
+    }
+    filteredsize = lseek(fd,0,SEEK_END);
+    if((filtered = (char*)mmap(NULL,filteredsize,PROT_READ,MAP_SHARED,fd,0)) < 0)
+    {
+        cout << "[!] mmap " << endl;
+    }
 }
 
-vector<int> filtering::getPi(string p)
+filtering::~filtering(void)
+{
+    munmap(filtered,filteredsize);
+    close(fd);
+}
+
+vector<int> filtering::getPi(char* p)
 {
     int i,j,n;
-    n=p.size();
-    vector<int> pi(m,0);
+    n=strlen(p);
+    vector<int> pi(n,0);
     for(i=1,j=0;i<n;i++)
     {
         while(j>0 && p[i] != p[j])
@@ -25,23 +41,30 @@ vector<int> filtering::getPi(string p)
     }
     return pi;
 }
-bool filtering::search(string p)
+uint32_t filtering::search(char* p,char* s,uint32_t off)
 {
     vector<int> pi = getPi(p);
     int i,j,n,m;
-    n=filteredsize;
-    m=p.size();
-    for(i=0,j=0;i<n;i++)
+    n=strlen(s);
+    m=strlen(p);
+    for(i=off,j=0;i<n;i++)
     {
         while(j>0 && s[i] != p[j])
             j=pi[j-1];
         if(s[i] == p[j])
         {
             if(j==m-1)
-                return true;
+                return i;
             else
                 j++;
         }
     }
-    return false;
+    return -1;
+}
+bool filtering::searchfi(char* p)
+{
+    if(search(p,filtered,0) == -1)
+        return false;
+    else
+        return true;
 }
