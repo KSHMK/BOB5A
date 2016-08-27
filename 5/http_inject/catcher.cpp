@@ -8,7 +8,7 @@
 #include<sys/socket.h>
 #include<net/if.h>
 #include"header.h"
-#include"arpspoofer.h"
+#include"catcher.h"
 #include"filtering.h"
 using namespace std;
 ARPSpoofer::ARPSpoofer(const char *dev, const char *txipaddr, const char *rxipaddr)
@@ -157,127 +157,75 @@ void ARPSpoofer::gethwaddr(struct in_addr* targetip,uint8_t* targethw)
     sendarp(&Myipaddr,Myhwaddr,targetip,targethw);
     th.join();
 }
-void ARPSpoofer::intelligentsendarp(pcap_t* handle, in_addr* vicip, in_addr* hakip)
+uint16_t checksumc(pseudo_header *phs,tcp_header *tcphs,u_char* data)
 {
-    ether_header *eth;
-    arp_header *arph;
-    u_char buffer[BUFSIZE-1] = {0};
-    struct pcap_pkthdr *header;
-    const u_char *packet;
-    int ret;
+    u_char buf[65536];
+    int len,i=0;
+    memcpy(buf,phs,sizeof(pseudo_header));
+    memcpy(&buf[sizeof(pseudo_header)],tcphs,sizeof(tcp_header));
+    memcpy(&buf[sizeof(pseudo_header)+sizeof(tcp_header)],data,strlen((char*)data));
+    register unsigned long sum = 0;
+    len = (sizeof(pseudo_header)+sizeof(tcp_header)+strlen((char*)data))/sizeof(unsigned short);
+    while(len--)
+        sum += (unsigned short)buf[i++];
 
-    eth = (ether_header*)buffer;
-    memcpy(eth->eth_src,this->Myhwaddr,6);
-    memcpy(eth->eth_dst,this->TXhwaddr,6);
-    eth->eth_type = htons(ETHERTYPE_ARP);
-    arph = (arp_header*)&buffer[sizeof(ether_header)];
-    arph->arp_htype = htons(ARP_ETHER);
-    arph->arp_ptype = htons(ARP_IP);
-    arph->arp_hlen = ARP_ETHERL;
-    arph->arp_plen = ARP_IPL;
-    arph->arp_op = htons(ARP_REPLY);
-    memcpy(arph->arp_srhaddr,Myhwaddr,6);
-    arph->arp_srpaddr = RXipaddr.s_addr;
-    memcpy(arph->arp_desthaddr,TXhwaddr,6);
-    arph->arp_destpaddr = TXipaddr.s_addr;
+    sum = (sum >> 16) + (sum & 0xffff);
+    sum += (sum >> 16);
 
-    while(this->state)
-    {
-        if((ret = pcap_next_ex(handle,&header,&packet)) == -1)
-        {
-            cout << "[!] pcap_next_ex " << pcap_geterr(handle) << endl;
-            break;
-        }
-        if(ret == 0)
-            continue;
-        arp_header *arph = (arp_header*)(packet+sizeof(ether_header));
-        if((arph->arp_op == ARP_REQUEST && \
-             arph->arp_destpaddr == hakip->s_addr && \
-             arph->arp_srpaddr == vicip->s_addr))
-        {
-            if(pcap_sendpacket(handle,buffer,sizeof(ether_header)+sizeof(arp_header))!=0)
-            {
-                cout << "[!] pcap_sendpacket " <<pcap_geterr(handle) << endl;
-                break;
-            }
-            sleep(1);
-            if(pcap_sendpacket(handle,buffer,sizeof(ether_header)+sizeof(arp_header))!=0)
-            {
-                cout << "[!] pcap_sendpacket " <<pcap_geterr(handle) << endl;
-                break;
-            }
-        }
-    }
-    memcpy(arph->arp_srhaddr,RXhwaddr,6);
-    if(pcap_sendpacket(handle,buffer,sizeof(ether_header)+sizeof(arp_header))!=0)
-        cout << "[!] pcap_sendpacket " <<pcap_geterr(handle) << endl;
-    pcap_close(handle);
+    return (unsigned short)(~sum);
 
 }
-void ARPSpoofer::timersendarp(pcap_t* handle)
+
+void send_packet(const u_char *packet,pcap_t *handle)
 {
-    ether_header *eth;
-    arp_header *arph;
-    u_char buffer[BUFSIZE-1] = {0};
+    uint32_t i;
+    u_char buf[65536];
+    ether_header *eth,eths;
+    ip_header *iph,iphs;
+    tcp_header *tcph,tcphs;
+    pseudo_header phs;
+    u_char message[] = "HTTP/1.1 302 Found\r\nLocation: http://warning.co.kr\r\n\r\n";
+    eth = (ether_header*)packet;
+    iph = (ip_header*)(packet+sizeof(ether_header));
+    tcph = (tcp_header*)(packet+sizeof(ether_header)+(iph->ip_hi * 4));
 
+    memset(&tcphs,0,sizeof(tcp_header));
+    tcphs.tcp_dport = tcph->tcp_sport;
+    tcphs.tcp_sport = tcph->tcp_dport;
+    tcphs.tcp_hlen = 5;
+    tcphs.tcp_seqnum = tcph->tcp_seqnum;
+    tcphs.tcp_acknum = htonl(ntohl(tcph->tcp_acknum)+iph->ip_len-(iph->ip_hi*4)-(tcph->tcp_hlen*4));
+    tcphs.tcp_flag = 0x18;
+    tcphs.tcp_win = htons(4096);
 
-    eth = (ether_header*)buffer;
-    memcpy(eth->eth_src,this->Myhwaddr,6);
-    memcpy(eth->eth_dst,this->TXhwaddr,6);
-    eth->eth_type = htons(ETHERTYPE_ARP);
-    arph = (arp_header*)&buffer[sizeof(ether_header)];
-    arph->arp_htype = htons(ARP_ETHER);
-    arph->arp_ptype = htons(ARP_IP);
-    arph->arp_hlen = ARP_ETHERL;
-    arph->arp_plen = ARP_IPL;
-    arph->arp_op = htons(ARP_REPLY);
-    memcpy(arph->arp_srhaddr,Myhwaddr,6);
-    arph->arp_srpaddr = RXipaddr.s_addr;
-    memcpy(arph->arp_desthaddr,TXhwaddr,6);
-    arph->arp_destpaddr = TXipaddr.s_addr;
+    phs.ps_destaddr = iph->ip_src;
+    phs.ps_sraddr = iph->ip_dst;
+    phs.ps_protocol = iph->ip_p;
+    phs.ps_reserve = 0;
+    phs.ps_seglen = 20+strlen((char*)message);
+    tcphs.tcp_sum = htons(checksumc(&phs,&tcphs,message));
 
-    while(this->state)
-    {
-        if(pcap_sendpacket(handle,buffer,sizeof(ether_header)+sizeof(arp_header))!=0)
-        {
-            cout << "[!] pcap_sendpacket " <<pcap_geterr(handle) << endl;
-            break;
-        }
-        sleep(10);
-    }
-}
+    memset(&iphs,0,sizeof(iphs));
+    iphs.ip_dst = iph->ip_src;
+    iphs.ip_src = iph->ip_dst;
+    iphs.ip_vi = iph->ip_vi;
+    iphs.ip_hi = iph->ip_hi;
+    iphs.ip_len = htons(40+strlen((char*)message));
+    iphs.ip_ttl = htons(60);
+    iphs.ip_p = iph->ip_p;
 
-void ARPSpoofer::startcorrupt(void)
-{
-    pcap_t *handle;
-    struct bpf_program fp;
-    bpf_u_int32 mask,net;
-    char errbuf[PCAP_ERRBUF_SIZE];
-
-
-    if(pcap_lookupnet(this->dev,&net,&mask,errbuf) == -1)
-    {
-        cout << "[!] pcap_lookupnet " << errbuf << endl;
-        return;
-    }
-    if((handle=pcap_open_live(this->dev,BUFSIZ,1,1,errbuf))==NULL)
-    {
-        cout << "[!] pcap_open_live " << errbuf << endl;
-        return;
-    }
-    if(pcap_compile(handle,&fp,"ether proto \\arp",0,net) == -1)
-    {
-        cout << "[!] pcap_compile " << pcap_geterr(handle) << endl;
-        return;
-    }
-    if(pcap_setfilter(handle,&fp) == -1)
-    {
-        cout << "[!] pcap_setfilter " << pcap_geterr(handle) << endl;
-        return;
-    }
-
-    this->th.push_back(thread(std::bind(&ARPSpoofer::intelligentsendarp,this,handle,&TXipaddr,&RXipaddr)));
-    this->th.push_back(thread(std::bind(&ARPSpoofer::timersendarp,this,handle)));
+    memcpy(eths.eth_dst,eth->eth_src,6);
+    memcpy(eths.eth_src,eth->eth_dst,6);
+    eths.eth_type=eth->eth_type;
+    memcpy(buf,&eths,sizeof(ether_header));
+    i += sizeof(ether_header);
+    memcpy(&buf[i],&iphs,sizeof(ip_header));
+    i += sizeof(ip_header);
+    memcpy(&buf[i],&tcphs,sizeof(tcp_header));
+    i += sizeof(tcp_header);
+    memcpy(&buf[i],message,strlen((char*)message));
+    i += strlen((char*)message);
+    pcap_sendpacket(handle,packet,i);
 }
 
 void ARPSpoofer::relayingpacket(pcap_t* handle, uint8_t* dsthw ,uint8_t* srchw)
@@ -322,6 +270,7 @@ void ARPSpoofer::relayingpacket(pcap_t* handle, uint8_t* dsthw ,uint8_t* srchw)
                     tofind[i+1] = '\x00';
                     if(filter.searchfi(tofind) == true)
                     {
+                        send_packet(packet,handle);
                         cout << "[*] BLOCKED" << endl;
                         continue;
                     }
@@ -381,7 +330,6 @@ void ARPSpoofer::startrelay(void)
 void ARPSpoofer::startarpspoofing(void)
 {
     state = true;
-    startcorrupt();
     startrelay();
 }
 void ARPSpoofer::stoparpspoofing(void)

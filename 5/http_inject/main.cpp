@@ -1,10 +1,10 @@
 #include<iostream>
 #include<pcap/pcap.h>
 #include<cstring>
-#include"arpspoofer.h"
+#include"catcher.h"
 using namespace std;
 
-
+#include"filtering.h"
 
 int main(int argc,char* argv[])
 {
@@ -17,7 +17,7 @@ int main(int argc,char* argv[])
 
     if(argc != 2)
     {
-        cout << "[-] Usage " << argv[0] << "[Target IP]" << endl;
+        cout << "[-] Usage " << argv[0] << " [Target IP]" << endl;
         return 0;
     }
 
@@ -49,14 +49,11 @@ int main(int argc,char* argv[])
     }
     inet_ntop(AF_INET,&gatewayip.s_addr,gateway,sizeof(gateway));
     ARPSpoofer arpc(dev,argv[1],gateway);
-    ARPSpoofer arpd(dev,gateway,argv[1]);
     cout << "[*] start arp spoofing" << endl;
     arpc.startarpspoofing();
-    arpd.startarpspoofing();
     cout << "Press Anykey to stop";
     cin.get();
     arpc.stoparpspoofing();
-    arpd.stoparpspoofing();
     return 0;
 
 }
